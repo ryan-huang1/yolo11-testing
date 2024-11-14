@@ -18,10 +18,10 @@ total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
 # Initialize video writer
 output_path = "output.mp4"
-writer = cv2.VideoWriter(output_path, 
-                        cv2.VideoWriter_fourcc(*'mp4v'), 
-                        fps, 
-                        (width, height))
+writer = cv2.VideoWriter(output_path,
+                         cv2.VideoWriter_fourcc(*'mp4v'),
+                         fps,
+                         (width, height))
 
 # Performance tracking variables
 start_time = time.time()
@@ -30,51 +30,81 @@ processing_times = []
 # Model input size
 input_size = 416
 
+# Batch size
+batch_size = 8  # Adjust this based on your system's memory and performance
+
+def pad_batch(batch_frames, batch_size):
+    pad_size = batch_size - len(batch_frames)
+    if pad_size > 0:
+        last_frame = batch_frames[-1]
+        for _ in range(pad_size):
+            batch_frames.append(last_frame)
+    return batch_frames
+
 try:
     # Create progress bar
     pbar = tqdm(total=total_frames, desc='Processing video', unit='frames')
-    
+
+    frame_count = 0
+    batch_frames = []
+
     while True:
-        frame_start_time = time.time()
         ret, frame = cap.read()
         if not ret:
             break
-            
-        # Run inference with explicit image size
-        results = model(frame, imgsz=input_size)
-        
-        # Visualize results
-        annotated_frame = results[0].plot()
-        
-        # Write frame to output video
-        writer.write(annotated_frame)
-        
-        # Calculate frame processing time
-        frame_time = time.time() - frame_start_time
-        processing_times.append(frame_time)
-        
-        # Update progress bar with current FPS
-        current_fps = 1 / frame_time if frame_time > 0 else 0
-        pbar.set_postfix({'FPS': f'{current_fps:.1f}'})
-        pbar.update(1)
+
+        batch_frames.append(frame)
+        frame_count += 1
+
+        # If batch is full or last frame
+        if len(batch_frames) == batch_size or frame_count == total_frames:
+            # Pad the batch if it's the last batch and less than batch_size
+            if len(batch_frames) < batch_size:
+                original_batch_length = len(batch_frames)
+                batch_frames = pad_batch(batch_frames, batch_size)
+            else:
+                original_batch_length = batch_size
+
+            frame_start_time = time.time()
+
+            # Run inference with explicit image size on the batch
+            results = model(batch_frames, imgsz=input_size)
+
+            # Visualize and write results
+            for result in results[:original_batch_length]:
+                annotated_frame = result.plot()
+                writer.write(annotated_frame)
+                pbar.update(1)
+
+            # Calculate batch processing time
+            frame_time = time.time() - frame_start_time
+            avg_frame_time = frame_time / original_batch_length
+            processing_times.extend([avg_frame_time] * original_batch_length)
+
+            # Update progress bar with current FPS
+            current_fps = original_batch_length / frame_time if frame_time > 0 else 0
+            pbar.set_postfix({'FPS': f'{current_fps:.1f}'})
+
+            # Clear batch
+            batch_frames = []
 
 finally:
     # Close progress bar
     pbar.close()
-    
+
     if processing_times:  # Only calculate stats if we have processed frames
         # Calculate and display final statistics
         total_time = time.time() - start_time
         average_fps = total_frames / total_time
         avg_time_per_frame = sum(processing_times) / len(processing_times)
-        
+
         print("\nProcessing Complete!")
         print(f"Total processing time: {total_time:.2f} seconds")
         print(f"Average FPS: {average_fps:.2f}")
         print(f"Average time per frame: {avg_time_per_frame*1000:.1f}ms")
         print(f"Total frames processed: {len(processing_times)}")
         print(f"Output saved to: {output_path}")
-    
+
     # Clean up
     cap.release()
     writer.release()

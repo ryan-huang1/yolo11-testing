@@ -3,7 +3,7 @@ import time
 
 def export_model(model_path="yolo11n.pt", 
                 imgsz=416,
-                batch_size=1,
+                batch_size=8,
                 opset=12,  # ONNX opset version
                 simplify=True,  # Simplify model
                 dynamic=False,  # Use dynamic axes
@@ -66,7 +66,7 @@ if __name__ == "__main__":
     settings = {
         'model_path': "yolo11n.pt",    # Path to your model
         'imgsz': 416,                  # Input size (smaller for CPU)
-        'batch_size': 1,               # Batch size for CPU
+        'batch_size': 8,               # Batch size for CPU
         'opset': 12,                   # ONNX opset version
         'simplify': True,              # Simplify model
         'dynamic': False,              # Dynamic batch size
