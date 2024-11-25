@@ -7,7 +7,7 @@ from tqdm import tqdm
 model = YOLO("yolo11n.onnx")
 
 # Open video file
-video_path = "video.mp4"
+video_path = "traffic_camera.mp4"
 cap = cv2.VideoCapture(video_path)
 
 # Get video properties
@@ -19,9 +19,9 @@ total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
 # Initialize video writer
 output_path = "output.mp4"
 writer = cv2.VideoWriter(output_path,
-                         cv2.VideoWriter_fourcc(*'mp4v'),
-                         fps,
-                         (width, height))
+                        cv2.VideoWriter_fourcc(*'avc1'),  # Using H.264 codec
+                        fps,
+                        (width, height))
 
 # Performance tracking variables
 start_time = time.time()
@@ -72,6 +72,13 @@ try:
 
             # Visualize and write results
             for result in results[:original_batch_length]:
+                # Filter for car class (typically class 2 in COCO dataset)
+                car_detections = result.boxes[result.boxes.cls == 2]
+                
+                # Create a new result object with only car detections
+                result.boxes = car_detections
+                
+                # Plot only car detections
                 annotated_frame = result.plot()
                 writer.write(annotated_frame)
                 pbar.update(1)
