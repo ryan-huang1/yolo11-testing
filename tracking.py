@@ -109,24 +109,38 @@ def update_trails(detections, frame_number):
             car_trails[trail_id] = car_trails[trail_id][-MAX_TRAIL_LENGTH:]
 
 def draw_trails(frame, frame_number):
-    """Draw trails on the frame"""
+    """Draw trails on the frame with smoothed positions"""
     for trail_id, positions in car_trails.items():
         # Only draw trails that have a recent detection
         if positions and positions[-1][0] >= frame_number - MAX_TRAIL_LENGTH:
-            # Draw lines connecting previous positions
-            for i in range(1, len(positions)):
-                prev_box = positions[i-1][1]
-                curr_box = positions[i][1]
-                
-                # Calculate center points
-                prev_center = (
-                    (prev_box[0] + prev_box[2]) // 2,
-                    (prev_box[1] + prev_box[3]) // 2
+            # Collect centers
+            centers = []
+            for pos in positions:
+                box = pos[1]
+                center = (
+                    (box[0] + box[2]) // 2,
+                    (box[1] + box[3]) // 2
                 )
-                curr_center = (
-                    (curr_box[0] + curr_box[2]) // 2,
-                    (curr_box[1] + curr_box[3]) // 2
+                centers.append(center)
+            
+            # Apply exponential smoothing to centers
+            smoothed_centers = []
+            alpha_smoothing = 0.2  # Smoothing factor (adjust as needed)
+            prev_smoothed_center = centers[0]
+            smoothed_centers.append(prev_smoothed_center)
+            for i in range(1, len(centers)):
+                curr_center = centers[i]
+                smoothed_center = (
+                    int(alpha_smoothing * curr_center[0] + (1 - alpha_smoothing) * prev_smoothed_center[0]),
+                    int(alpha_smoothing * curr_center[1] + (1 - alpha_smoothing) * prev_smoothed_center[1])
                 )
+                smoothed_centers.append(smoothed_center)
+                prev_smoothed_center = smoothed_center
+            
+            # Draw lines connecting smoothed positions
+            for i in range(1, len(smoothed_centers)):
+                prev_center = smoothed_centers[i-1]
+                curr_center = smoothed_centers[i]
                 
                 # Calculate alpha based on position age
                 alpha = 0.7 * (1 - (frame_number - positions[i][0]) / MAX_TRAIL_LENGTH)
@@ -135,6 +149,7 @@ def draw_trails(frame, frame_number):
                     overlay = frame.copy()
                     cv2.line(overlay, prev_center, curr_center, (0, 255, 0), 2)
                     cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
+
 
 def pad_batch(batch_frames, batch_size):
     pad_size = batch_size - len(batch_frames)
